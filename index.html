@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>WebRTC Webcam Streaming</title>
+  <style>
+    video {
+      max-width: 50%;
+      margin: 0 auto;
+      display: block;
+      float: left;
+    }
+
+    #local-video {
+      border: 2px solid red;
+    }
+
+    #remote-video {
+      border: 2px solid green;
+    }
+  </style>
+</head>
+<body>
+  <video id="local-video" autoplay muted playsinline></video> <!-- Add 'playsinline' attribute -->
+  <video id="remote-video" autoplay playsinline></video> <!-- Remove 'muted' attribute -->
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="client.js"></script>
+</body>
+</html>

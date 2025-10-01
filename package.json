@@ -1,0 +1,25 @@
+{
+  "name": "shrimp-cam",
+  "version": "1.0.0",
+  "description": "LOVELY SHRIMP",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/seanyweany/shrimp-cam.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/seanyweany/shrimp-cam/issues"
+  },
+  "homepage": "https://github.com/seanyweany/shrimp-cam#readme",
+  "dependencies": {
+    "express": "^5.1.0",
+    "socket.io": "^4.8.1",
+    "webrtc.io": "^0.0.4"
+  }
+}
