@@ -1,31 +1,34 @@
 <!DOCTYPE html>
 <html lang="en">
+  <style>
+    html {
+      margin: 0;
+      width: 100%;
+    }
+
+    body {
+      margin: 0;
+      min-width: 100%;
+      overflow: hidden
+    }
+  </style>
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>WebRTC Webcam Streaming</title>
-  <style>
-    video {
-      max-width: 50%;
-      margin: 0 auto;
-      display: block;
-      float: left;
-    }
-
-    #local-video {
-      border: 2px solid red;
-    }
-
-    #remote-video {
-      border: 2px solid green;
-    }
-  </style>
+  <title>Shrimp Stream</title>
 </head>
 <body>
-  <video id="local-video" autoplay muted playsinline></video> <!-- Add 'playsinline' attribute -->
-  <video id="remote-video" autoplay playsinline></video> <!-- Remove 'muted' attribute -->
+  <video id="webcam" autoplay playsinline style="width: 100%; height: 100%"></video>
+  <script>
+    const video = document.getElementById('webcam');
 
-  <script src="/socket.io/socket.io.js"></script>
-  <script src="client.js"></script>
+    navigator.mediaDevices.getUserMedia({ audio: false, video: true })
+      .then(stream => {
+        video.srcObject = stream;
+      })
+      .catch(error => {
+        console.error('Error accessing media devices.', error);
+      });
+  </script>
 </body>
 </html>
