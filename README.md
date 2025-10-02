@@ -1,2 +1,0 @@
-# shrimp-cam
-LOVELY SHRIMP
