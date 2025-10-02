@@ -41,20 +41,6 @@
             controls: true,
             fluid: true
         });
-
-        //  Optionally, add fullscreen button to the custom control bar
-        const fullscreenButton = document.createElement('button');
-        fullscreenButton.className = 'vjs-fullscreen-control';
-        fullscreenButton.innerHTML = '<span class="vjs-icon-placeholder"></span>';
-        fullscreenButton.onclick = () => {
-            player.requestFullscreen();
-        };
-
-        // Append the fullscreen button to the custom control bar
-        const customControls = document.createElement('div');
-        customControls.className = 'video-js vjs-default-skin';
-        customControls.appendChild(fullscreenButton);
-        player.controlBar.addChild(customControls);
     </script>
 </body>
 </html>

@@ -1,2 +1,1 @@
-# shrimp-cam
-LOVELY SHRIMP
+# If you're seeing this then that's pretty bad :<
