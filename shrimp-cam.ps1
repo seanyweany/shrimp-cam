@@ -14,8 +14,17 @@ param(
   [string] $Url        = 'https://seanyweany.github.io/shrimp-cam/',
   [string] $Camera     = '',
   [string] $ProfileDir = "$env:LocalAppData\shrimp-cam",
-  [string] $KeyFile    = (Join-Path $PSScriptRoot 'key.txt')
+  [string] $KeyFile    = ''
 )
+
+# $PSScriptRoot is not reliably populated inside a param() default, so the
+# key file is resolved here, next to the script, wherever it was started from.
+if (-not $KeyFile) {
+  $root = if ($PSScriptRoot) { $PSScriptRoot }
+          elseif ($MyInvocation.MyCommand.Path) { Split-Path -Parent $MyInvocation.MyCommand.Path }
+          else { (Get-Location).Path }
+  $KeyFile = Join-Path $root 'key.txt'
+}
 
 # No key given? Keep one on disk, so the share link survives a restart.
 if (-not $Key) {
