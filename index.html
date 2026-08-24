@@ -1,46 +1,216 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
-  <style>
-    body, html {
-      margin: 0;
-      padding: 0;
-      width: 100%;
-      height: 100%;
-      overflow: hidden;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-    }
-    #my-video.vjs-default-skin {
-      width: 100%;
-      height: 100%;
-      position: absolute;
-      top: 0;
-      left: 0;
-      z-index: 1;
-    }
-  </style>
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>SHRIMP CAM</title>
-    <!-- Include Video.js CSS -->
-    <link href="https://vjs.zencdn.net/7.20.3/video-js.css" rel="stylesheet" />
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>shrimp cam</title>
+<link rel="icon" href="data:,">
+<style>
+  html, body { margin: 0; height: 100%; background: #000; }
+  body { display: grid; place-items: center;
+         color: #9a9a9a; font: 14px/1.6 ui-monospace, Consolas, monospace; }
+  video { width: 100vw; height: 100vh; object-fit: contain; background: #000; }
+  [hidden] { display: none !important; }
+  #status { position: fixed; left: 0; right: 0; bottom: 0; margin: 0;
+            padding: .5rem; text-align: center; background: #000000cc; }
+  form { display: grid; gap: .75rem; justify-items: center; padding: 1rem; }
+  input, button { font: inherit; padding: .5rem .7rem; border: 1px solid #333;
+                  border-radius: 4px; background: #111; color: #eee; }
+  button { cursor: pointer; }
+</style>
 </head>
 <body>
-    <video id="my-video" class="video-js vjs-default-skin" controls preload="auto" width="640" height="264">
-        <source src="/hls/output.m3u8" type="application/x-mpegURL" />
-        Your browser does not support the video tag.
-    </video>
 
-    <!-- Include Video.js JS -->
-    <script src="https://vjs.zencdn.net/7.20.3/video.min.js"></script>
-    <script>
-        var player = videojs('my-video', {
-            autoplay: true,
-            controls: true,
-            fluid: true
-        });
-    </script>
+<video id="video" autoplay playsinline muted hidden></video>
+
+<form id="gate" hidden>
+  <label for="secret">shrimp cam &mdash; key</label>
+  <input id="secret" type="password" autocomplete="off">
+  <button>watch</button>
+</form>
+
+<p id="status">loading&hellip;</p>
+
+<script src="https://cdn.jsdelivr.net/npm/peerjs@1.5.5/dist/peerjs.min.js"
+        integrity="sha384-x0YgkOr/3UOZP2CRDxGW9e0Q+2Qjyr3uJrm4xU32Y7ZCNAo7Cc7bjhrZMi/dwczu"
+        crossorigin="anonymous"></script>
+<script>
+// shrimp cam - one page, two modes:
+//   watch:  https://<page>/#key=SECRET
+//   camera: https://<page>/#key=SECRET&host=1[&cam=NAME]
+//
+// The peer id is SHA-256(key), so only someone holding the key can find the
+// camera (or register as it). The key itself is never sent anywhere: it lives
+// in the URL fragment, which browsers do not put on the wire. Video is WebRTC,
+// so it flows peer-to-peer under DTLS-SRTP and never touches a server.
+
+const ICE = [
+  { urls: 'stun:stun.l.google.com:19302' },
+  { urls: ['turn:staticauth.openrelay.metered.ca:80',
+           'turn:staticauth.openrelay.metered.ca:443',
+           'turns:staticauth.openrelay.metered.ca:443'],
+    username: 'openrelayproject', credential: 'openrelayproject' },
+];
+const MAX_VIEWERS = 6;
+const RETRY_MS = 5000;
+
+const opts   = new URLSearchParams(location.hash.slice(1));
+const video  = document.getElementById('video');
+const gate   = document.getElementById('gate');
+const banner = document.getElementById('status');
+
+const say   = t => { banner.textContent = t; banner.hidden = !t; };
+const later = fn => setTimeout(fn, RETRY_MS);
+
+const peerId = async key => {
+  const bytes = new TextEncoder().encode('shrimp-cam\n' + key);
+  const hash  = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes));
+  return 'shrimpcam-' +
+    [...hash.slice(0, 16)].map(b => b.toString(16).padStart(2, '0')).join('');
+};
+
+const newPeer = id => new Peer(id, { config: { iceServers: ICE } });
+
+video.onclick = () => document.fullscreenElement
+  ? document.exitFullscreen()
+  : video.requestFullscreen().catch(() => {});
+
+// --- camera side -----------------------------------------------------------
+
+async function broadcast(key) {
+  say('starting camera');
+
+  const want = { audio: false, video: { width: { ideal: 1280 },
+                                        height: { ideal: 720 },
+                                        frameRate: { ideal: 30 } } };
+  let stream = await navigator.mediaDevices.getUserMedia(want);
+
+  // Labels are only readable once permission is granted, so the default
+  // device opens first and we swap only if a better match turns up.
+  const name = opts.get('cam');
+  if (name) {
+    const cams = (await navigator.mediaDevices.enumerateDevices())
+      .filter(d => d.kind === 'videoinput');
+    const pick = cams.find(d => d.label.toLowerCase().includes(name.toLowerCase()));
+    if (pick && pick.deviceId !== stream.getVideoTracks()[0].getSettings().deviceId) {
+      stream.getTracks().forEach(t => t.stop());
+      want.video.deviceId = { exact: pick.deviceId };
+      stream = await navigator.mediaDevices.getUserMedia(want);
+    }
+  }
+
+  video.srcObject = stream;
+  video.hidden = false;
+  // A yanked USB cable ends the track for good, so start clean.
+  stream.getVideoTracks()[0].onended = () => later(() => location.reload());
+
+  const id      = await peerId(key);
+  const viewers = new Set();
+  const tally   = () => say('live · ' + viewers.size + ' watching');
+
+  (function serve() {
+    const peer = newPeer(id);
+    let dead = false;
+
+    peer.on('open', tally);
+
+    peer.on('connection', conn => {
+      if (viewers.size >= MAX_VIEWERS) return conn.close();
+      conn.on('open', () => {
+        const call = peer.call(conn.peer, stream);
+        viewers.add(conn.peer);
+        tally();
+        let gone = false;
+        const drop = () => {
+          if (gone) return;
+          gone = true;
+          viewers.delete(conn.peer);
+          call.close();
+          conn.close();
+          tally();
+        };
+        for (const ev of ['close', 'error']) { conn.on(ev, drop); call.on(ev, drop); }
+      });
+    });
+
+    peer.on('disconnected', () => peer.reconnect());
+
+    // 'unavailable-id' means the broker still holds our slot from a previous
+    // run; it expires on its own, so the only sane move is to keep trying.
+    peer.on('error', err => {
+      // A viewer that vanished mid-call is their problem, not ours.
+      if (err.type === 'peer-unavailable' || dead) return;
+      dead = true;
+      say('reconnecting (' + err.type + ')');
+      viewers.clear();
+      peer.destroy();
+      later(serve);
+    });
+  })();
+}
+
+// --- viewer side -----------------------------------------------------------
+
+function watch(key) {
+  let peer, dead = false;
+
+  say('connecting');
+
+  const restart = why => {
+    if (dead) return;
+    dead = true;
+    say(why + ' · retrying');
+    video.hidden = true;
+    video.srcObject = null;
+    if (peer) peer.destroy();
+    later(() => watch(key));
+  };
+
+  peerId(key).then(id => {
+    peer = newPeer();
+
+    peer.on('open', () => {
+      say('waiting for video');
+      // The camera calls us back: an offer needs a track, and we have none.
+      peer.connect(id, { reliable: true })
+          .on('close', () => restart('disconnected'));
+    });
+
+    peer.on('call', call => {
+      call.answer();                       // receive-only, we send nothing
+      call.on('stream', s => { video.srcObject = s; video.hidden = false; say(''); });
+      call.on('close', () => restart('stream ended'));
+    });
+
+    peer.on('error', err => restart(
+      err.type === 'peer-unavailable' ? 'camera offline' : err.type));
+  });
+}
+
+// --- boot ------------------------------------------------------------------
+
+const key = opts.get('key');
+
+if (key && opts.has('host')) {
+  broadcast(key).catch(err => {
+    say('camera error: ' + err.name);
+    later(() => location.reload());
+  });
+} else if (key) {
+  watch(key);
+} else {
+  say('');
+  gate.hidden = false;
+  document.getElementById('secret').focus();
+  gate.onsubmit = e => {
+    e.preventDefault();
+    const entered = document.getElementById('secret').value.trim();
+    if (!entered) return;
+    history.replaceState(null, '', '#key=' + encodeURIComponent(entered));
+    gate.hidden = true;
+    watch(entered);
+  };
+}
+</script>
 </body>
 </html>
