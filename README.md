@@ -68,6 +68,11 @@ with `--size 1280x720 --fps 30` if you want to see where it falls over.
 
 A Pi 4 or Pi 5 does considerably better; the script is unchanged on those.
 
+The host encodes a *separate* stream per viewer, so viewers cost roughly as
+much as resolution does. `MAX_VIEWERS` is the policy limit, not a capacity
+estimate - a Pi 3 will run out of CPU after two or three watchers, and any
+host runs out of upstream bandwidth long before a large limit is reached.
+
 ### Starting it at boot
 
 The script needs a graphical session to draw into. On Pi OS with Desktop and
@@ -92,7 +97,8 @@ powershell.exe -WindowStyle Hidden -ExecutionPolicy Bypass -File C:\path\to\shri
 ## Watch
 
 Open the link the script printed, or open the page bare and paste the key in.
-Click the video for fullscreen. Six viewers at a time (`MAX_VIEWERS`).
+Click the video for fullscreen. `MAX_VIEWERS` in `index.html` caps how
+many people can watch at once.
 
 ## Insta360 Link on Linux
 
