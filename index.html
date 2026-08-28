@@ -80,9 +80,14 @@ video.onclick = () => document.fullscreenElement
 async function broadcast(key) {
   say('starting camera');
 
-  const want = { audio: false, video: { width: { ideal: 1280 },
-                                        height: { ideal: 720 },
-                                        frameRate: { ideal: 30 } } };
+  // Weak hosts (a Pi encodes WebRTC video in software) ask for less.
+  const asked = (opts.get('size') || '').split('x').map(Number);
+  const [w, h] = asked.length === 2 && asked.every(Number.isFinite) ? asked : [1280, 720];
+  const fps = Number(opts.get('fps')) || 30;
+
+  const want = { audio: false, video: { width:  { ideal: w },
+                                        height: { ideal: h },
+                                        frameRate: { ideal: fps } } };
   let stream = await navigator.mediaDevices.getUserMedia(want);
 
   // Labels are only readable once permission is granted, so the default
